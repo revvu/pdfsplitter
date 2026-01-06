@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useCallback, useMemo } from "react";
+import { useState, useRef, useCallback, useMemo, useEffect } from "react";
 import { PDFDocument } from "pdf-lib";
 import dynamic from "next/dynamic";
 
@@ -40,6 +40,8 @@ export default function Home() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const pageRefs = useRef<Map<number, HTMLDivElement>>(new Map());
 
   const formatFileSize = (bytes: number): string => {
     if (bytes < 1024) return bytes + " B";
@@ -186,6 +188,38 @@ export default function Home() {
     [startPage, endPage]
   );
 
+  const isPageVisible = useCallback(
+    (pageNum: number) => {
+      return pageNum >= startPage;
+    },
+    [startPage]
+  );
+
+  // Auto-scroll to start page when it changes
+  useEffect(() => {
+    if (pdfInfo && startPage > 0) {
+      const timeoutId = setTimeout(() => {
+        const pageElement = pageRefs.current.get(startPage);
+        if (pageElement && scrollContainerRef.current) {
+          pageElement.scrollIntoView({
+            behavior: "smooth",
+            block: "start",
+          });
+        }
+      }, 100); // Small delay to allow animations to start
+      return () => clearTimeout(timeoutId);
+    }
+  }, [startPage, pdfInfo]);
+
+  // Helper to set page ref
+  const setPageRef = useCallback((pageNum: number, element: HTMLDivElement | null) => {
+    if (element) {
+      pageRefs.current.set(pageNum, element);
+    } else {
+      pageRefs.current.delete(pageNum);
+    }
+  }, []);
+
   return (
     <div className="min-h-screen forest-bg">
       {/* Header */}
@@ -301,7 +335,7 @@ export default function Home() {
                     {pdfInfo.pageCount} pages
                   </span>
                 </div>
-                <div className="preview-scroll">
+                <div className="preview-scroll" ref={scrollContainerRef}>
                   <Document
                     file={pdfInfo.url}
                     loading={
@@ -310,27 +344,57 @@ export default function Home() {
                       </div>
                     }
                   >
-                    <div className="space-y-4">
-                      {pageNumbers.map((pageNum) => (
-                        <div
-                          key={pageNum}
-                          className={`page-thumb ${
-                            isPageSelected(pageNum) ? "selected" : ""
-                          }`}
-                          onClick={() => {
-                            setStartPage(pageNum);
-                            setEndPage(pageNum);
-                          }}
-                        >
-                          <Page
-                            pageNumber={pageNum}
-                            width={280}
-                            renderTextLayer={false}
-                            renderAnnotationLayer={false}
-                          />
-                          <span className="page-number">{pageNum}</span>
-                        </div>
-                      ))}
+                    <div>
+                      {pageNumbers.map((pageNum) => {
+                        const visible = isPageVisible(pageNum);
+                        const selected = isPageSelected(pageNum);
+                        return (
+                          <div
+                            key={pageNum}
+                            ref={(el) => setPageRef(pageNum, el)}
+                            className={`page-thumb-wrapper ${
+                              visible ? "visible" : "hidden"
+                            }`}
+                          >
+                            <div
+                              className={`page-thumb ${
+                                selected
+                                  ? "selected"
+                                  : visible
+                                  ? "unselected"
+                                  : ""
+                              }`}
+                              onClick={() => {
+                                setStartPage(pageNum);
+                                setEndPage(pageNum);
+                              }}
+                            >
+                              <Page
+                                pageNumber={pageNum}
+                                width={280}
+                                renderTextLayer={false}
+                                renderAnnotationLayer={false}
+                              />
+                              {selected && (
+                                <svg
+                                  className="selection-check"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  viewBox="0 0 24 24"
+                                  strokeWidth={3}
+                                >
+                                  <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    d="M5 13l4 4L19 7"
+                                  />
+                                </svg>
+                              )}
+                              <span className="page-number">{pageNum}</span>
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
                   </Document>
                 </div>
