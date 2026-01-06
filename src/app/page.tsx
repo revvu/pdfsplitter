@@ -190,9 +190,9 @@ export default function Home() {
 
   const isPageVisible = useCallback(
     (pageNum: number) => {
-      return pageNum >= startPage;
+      return pageNum >= startPage && pageNum <= endPage;
     },
-    [startPage]
+    [startPage, endPage]
   );
 
   // Auto-scroll to start page when it changes
@@ -357,13 +357,7 @@ export default function Home() {
                             }`}
                           >
                             <div
-                              className={`page-thumb ${
-                                selected
-                                  ? "selected"
-                                  : visible
-                                  ? "unselected"
-                                  : ""
-                              }`}
+                              className={`page-thumb ${visible ? "selected" : ""}`}
                               onClick={() => {
                                 setStartPage(pageNum);
                                 setEndPage(pageNum);
@@ -375,7 +369,7 @@ export default function Home() {
                                 renderTextLayer={false}
                                 renderAnnotationLayer={false}
                               />
-                              {selected && (
+                              {visible && (
                                 <svg
                                   className="selection-check"
                                   fill="none"
