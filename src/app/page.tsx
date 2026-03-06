@@ -34,6 +34,7 @@ if (typeof window !== "undefined") {
 
 export default function Home() {
   const [pdfInfo, setPdfInfo] = useState<PdfInfo | null>(null);
+  const [selectedFileName, setSelectedFileName] = useState<string>("");
   const [startPage, setStartPage] = useState<number>(1);
   const [endPage, setEndPage] = useState<number>(1);
   const [isDragging, setIsDragging] = useState(false);
@@ -52,6 +53,7 @@ export default function Home() {
   const loadPdf = useCallback(async (file: File) => {
     setError(null);
     setIsProcessing(true);
+    setSelectedFileName(file.name);
 
     try {
       const arrayBuffer = await file.arrayBuffer();
@@ -84,6 +86,7 @@ export default function Home() {
     if (file && file.type === "application/pdf") {
       loadPdf(file);
     } else if (file) {
+      setSelectedFileName("");
       setError("Please select a PDF file.");
     }
   };
@@ -107,6 +110,7 @@ export default function Home() {
       if (file && file.type === "application/pdf") {
         loadPdf(file);
       } else if (file) {
+        setSelectedFileName("");
         setError("Please drop a PDF file.");
       }
     },
@@ -166,6 +170,7 @@ export default function Home() {
       URL.revokeObjectURL(pdfInfo.url);
     }
     setPdfInfo(null);
+    setSelectedFileName("");
     setStartPage(1);
     setEndPage(1);
     setError(null);
@@ -180,13 +185,6 @@ export default function Home() {
     if (!pdfInfo) return [];
     return Array.from({ length: pdfInfo.pageCount }, (_, i) => i + 1);
   }, [pdfInfo]);
-
-  const isPageSelected = useCallback(
-    (pageNum: number) => {
-      return pageNum >= startPage && pageNum <= endPage;
-    },
-    [startPage, endPage]
-  );
 
   const isPageVisible = useCallback(
     (pageNum: number) => {
@@ -223,7 +221,7 @@ export default function Home() {
   return (
     <div className="min-h-screen forest-bg">
       {/* Header */}
-      <header className="px-6 py-8 text-center relative z-10">
+      <header className="px-6 pt-10 pb-6 text-center relative z-10">
         <div className="animate-fade-up">
           {/* Decorative leaf */}
           <div className="flex justify-center mb-4">
@@ -236,12 +234,12 @@ export default function Home() {
             </svg>
           </div>
           <h1
-            className="text-3xl md:text-4xl mb-2 text-[var(--foreground)]"
+            className="text-4xl md:text-5xl mb-3 text-[var(--foreground)] tracking-tight"
             style={{ fontFamily: "var(--font-display)" }}
           >
             Page Extractor
           </h1>
-          <p className="text-[var(--muted)] text-base">
+          <p className="text-[var(--muted)] text-sm md:text-base">
             Select pages from your PDF with a live preview
           </p>
         </div>
@@ -251,15 +249,27 @@ export default function Home() {
       <main className="px-6 pb-12 relative z-10">
         {!pdfInfo ? (
           /* Upload State */
-          <div className="max-w-xl mx-auto animate-fade-up delay-1" style={{ opacity: 0 }}>
+          <div
+            className="max-w-2xl mx-auto min-h-[calc(100vh-16rem)] flex flex-col justify-center animate-fade-up delay-1"
+            style={{ opacity: 0 }}
+          >
             <div
-              className={`drop-zone card p-12 md:p-16 text-center cursor-pointer border-2 border-dashed ${
+              className={`drop-zone card p-8 md:p-10 text-center cursor-pointer border-2 border-dashed ${
                 isDragging ? "dragging" : "border-[var(--border)]"
               }`}
               onDragOver={handleDragOver}
               onDragLeave={handleDragLeave}
               onDrop={handleDrop}
               onClick={() => fileInputRef.current?.click()}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  fileInputRef.current?.click();
+                }
+              }}
+              role="button"
+              tabIndex={0}
+              aria-label="Upload PDF file"
             >
               <input
                 ref={fileInputRef}
@@ -272,7 +282,12 @@ export default function Home() {
               {isProcessing ? (
                 <div className="animate-fade-in">
                   <div className="spinner mx-auto mb-6" />
-                  <p className="text-[var(--muted)]">Reading your document...</p>
+                  <p className="text-[var(--muted)] mb-2">Preparing preview...</p>
+                  {selectedFileName && (
+                    <p className="text-xs text-[var(--muted-light)] truncate max-w-sm mx-auto">
+                      {selectedFileName}
+                    </p>
+                  )}
                 </div>
               ) : (
                 <>
@@ -295,12 +310,32 @@ export default function Home() {
                     </svg>
                   </div>
 
-                  <p className="text-lg mb-2 text-[var(--foreground)]">
+                  <p className="text-lg mb-2 text-[var(--foreground)] font-semibold">
                     {isDragging ? "Release to upload" : "Drop your PDF here"}
                   </p>
-                  <p className="text-[var(--muted)] text-sm">
-                    or click to browse your files
+                  <p className="text-[var(--muted)] text-sm mb-5">
+                    {isDragging
+                      ? "Drop now to start extracting pages"
+                      : "Drag and drop or use the button below"}
                   </p>
+                  <button
+                    type="button"
+                    className="btn btn-primary mx-auto"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      fileInputRef.current?.click();
+                    }}
+                  >
+                    Choose PDF
+                  </button>
+                  <p className="text-xs text-[var(--muted-light)] mt-4">
+                    PDF only. Processing happens locally in your browser.
+                  </p>
+                  {selectedFileName && (
+                    <p className="text-xs text-[var(--muted)] mt-2 truncate max-w-sm mx-auto">
+                      Selected: {selectedFileName}
+                    </p>
+                  )}
                 </>
               )}
             </div>
@@ -314,7 +349,7 @@ export default function Home() {
               </div>
             )}
 
-            <p className="text-center text-xs text-[var(--muted-light)] mt-10">
+            <p className="text-center text-xs text-[var(--muted)] mt-8">
               Your files stay private — all processing happens in your browser
             </p>
           </div>
@@ -347,7 +382,6 @@ export default function Home() {
                     <div>
                       {pageNumbers.map((pageNum) => {
                         const visible = isPageVisible(pageNum);
-                        const selected = isPageSelected(pageNum);
                         return (
                           <div
                             key={pageNum}

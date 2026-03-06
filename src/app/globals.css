@@ -2,14 +2,14 @@
 
 :root {
   /* Forest/Nature Palette */
-  --background: #f7f5f0;
-  --background-warm: #f3efe8;
-  --foreground: #2c3e2d;
+  --background: #f8f6f2;
+  --background-warm: #f4f0e8;
+  --foreground: #1f3024;
   --card-bg: #ffffff;
-  --border: #d4d1c7;
-  --border-hover: #b8b4a8;
-  --muted: #6b7c6b;
-  --muted-light: #8a9a8a;
+  --border: #cec8bc;
+  --border-hover: #a9a293;
+  --muted: #4f6653;
+  --muted-light: #6a7d6a;
 
   /* Forest Green Accent */
   --accent: #2d5a3d;
@@ -149,9 +149,9 @@ body {
 
 /* Focus states */
 :focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 3px solid var(--accent);
   outline-offset: 3px;
-  border-radius: 4px;
+  border-radius: 6px;
 }
 
 /* Selection */
@@ -164,8 +164,9 @@ body {
 .forest-bg {
   position: relative;
   background:
-    radial-gradient(ellipse at 20% 80%, rgba(45, 90, 61, 0.03) 0%, transparent 50%),
-    radial-gradient(ellipse at 80% 20%, rgba(107, 83, 68, 0.03) 0%, transparent 50%),
+    radial-gradient(ellipse at 20% 80%, rgba(45, 90, 61, 0.04) 0%, transparent 56%),
+    radial-gradient(ellipse at 80% 20%, rgba(107, 83, 68, 0.04) 0%, transparent 56%),
+    radial-gradient(circle at 50% 0%, rgba(255, 255, 255, 0.65) 0%, rgba(255, 255, 255, 0) 62%),
     var(--background);
 }
 
@@ -174,8 +175,12 @@ body {
   position: fixed;
   inset: 0;
   pointer-events: none;
-  opacity: 0.4;
-  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 400 400' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+  opacity: 0.35;
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.22) 0%,
+    rgba(255, 255, 255, 0.02) 100%
+  );
   z-index: 0;
 }
 
@@ -184,6 +189,7 @@ body {
   transition: all 0.4s cubic-bezier(0.22, 1, 0.36, 1);
   position: relative;
   overflow: hidden;
+  min-height: 360px;
 }
 
 .drop-zone::before {
@@ -208,6 +214,7 @@ body {
 .drop-zone.dragging {
   border-color: var(--accent);
   background: var(--accent-light);
+  border-style: solid;
   transform: translateY(-4px) scale(1.01);
   box-shadow:
     0 0 0 4px var(--accent-muted),
@@ -216,6 +223,13 @@ body {
 
 .drop-zone.dragging::before {
   opacity: 1;
+}
+
+.drop-zone:focus-visible {
+  border-color: var(--accent);
+  box-shadow:
+    0 0 0 4px color-mix(in srgb, var(--accent) 22%, transparent),
+    0 12px 32px rgba(45, 90, 61, 0.12);
 }
 
 /* Button base */
@@ -255,7 +269,7 @@ body {
 .btn-primary {
   background: var(--accent);
   color: #ffffff;
-  padding: 1rem 2rem;
+  padding: 0.9rem 1.6rem;
   border-radius: 12px;
   font-size: 0.9375rem;
   letter-spacing: 0.02em;
@@ -543,4 +557,10 @@ input[type="number"] {
 
 .react-pdf__Page__canvas {
   border-radius: 4px;
+}
+
+@media (max-width: 640px) {
+  .drop-zone {
+    min-height: 300px;
+  }
 }
