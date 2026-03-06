@@ -37,6 +37,7 @@ export default function Home() {
   const [selectedFileName, setSelectedFileName] = useState<string>("");
   const [startPage, setStartPage] = useState<number>(1);
   const [endPage, setEndPage] = useState<number>(1);
+  const [selectedPages, setSelectedPages] = useState<number[]>([]);
   const [isDragging, setIsDragging] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -50,36 +51,58 @@ export default function Home() {
     return (bytes / (1024 * 1024)).toFixed(1) + " MB";
   };
 
-  const loadPdf = useCallback(async (file: File) => {
-    setError(null);
-    setIsProcessing(true);
-    setSelectedFileName(file.name);
-
-    try {
-      const arrayBuffer = await file.arrayBuffer();
-      const pdf = await PDFDocument.load(arrayBuffer);
-      const pageCount = pdf.getPageCount();
-
-      // Create blob URL for react-pdf
-      const blob = new Blob([arrayBuffer], { type: "application/pdf" });
-      const url = URL.createObjectURL(blob);
-
-      setPdfInfo({
-        name: file.name,
-        pageCount,
-        size: formatFileSize(file.size),
-        data: arrayBuffer,
-        url,
-      });
-      setStartPage(1);
-      setEndPage(pageCount);
-    } catch {
-      setError("Unable to read this file. Please ensure it's a valid PDF.");
-      setPdfInfo(null);
-    } finally {
-      setIsProcessing(false);
-    }
+  const normalizePages = useCallback((pages: number[]) => {
+    return Array.from(new Set(pages)).sort((a, b) => a - b);
   }, []);
+
+  const buildRangePages = useCallback(
+    (from: number, to: number) => {
+      if (!pdfInfo) return [];
+
+      const min = Math.max(1, Math.min(from, to));
+      const max = Math.min(pdfInfo.pageCount, Math.max(from, to));
+
+      return Array.from({ length: max - min + 1 }, (_, idx) => min + idx);
+    },
+    [pdfInfo]
+  );
+
+  const loadPdf = useCallback(
+    async (file: File) => {
+      setError(null);
+      setIsProcessing(true);
+      setSelectedFileName(file.name);
+
+      try {
+        const arrayBuffer = await file.arrayBuffer();
+        const pdf = await PDFDocument.load(arrayBuffer);
+        const pageCount = pdf.getPageCount();
+
+        // Create blob URL for react-pdf
+        const blob = new Blob([arrayBuffer], { type: "application/pdf" });
+        const url = URL.createObjectURL(blob);
+
+        setPdfInfo({
+          name: file.name,
+          pageCount,
+          size: formatFileSize(file.size),
+          data: arrayBuffer,
+          url,
+        });
+
+        const allPages = Array.from({ length: pageCount }, (_, i) => i + 1);
+        setSelectedPages(allPages);
+        setStartPage(1);
+        setEndPage(pageCount);
+      } catch {
+        setError("Unable to read this file. Please ensure it's a valid PDF.");
+        setPdfInfo(null);
+      } finally {
+        setIsProcessing(false);
+      }
+    },
+    []
+  );
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -118,7 +141,7 @@ export default function Home() {
   );
 
   const extractPages = async () => {
-    if (!pdfInfo) return;
+    if (!pdfInfo || selectedPages.length === 0) return;
 
     setError(null);
     setIsProcessing(true);
@@ -127,14 +150,7 @@ export default function Home() {
       const sourcePdf = await PDFDocument.load(pdfInfo.data);
       const newPdf = await PDFDocument.create();
 
-      const start = startPage - 1;
-      const end = endPage - 1;
-
-      const pageIndices = [];
-      for (let i = start; i <= end; i++) {
-        pageIndices.push(i);
-      }
-
+      const pageIndices = selectedPages.map((pageNum) => pageNum - 1);
       const pages = await newPdf.copyPages(sourcePdf, pageIndices);
       pages.forEach((page) => newPdf.addPage(page));
 
@@ -147,7 +163,19 @@ export default function Home() {
       const link = document.createElement("a");
       link.href = url;
       const baseName = pdfInfo.name.replace(".pdf", "");
-      link.download = `${baseName}_pages_${startPage}-${endPage}.pdf`;
+
+      const contiguous = selectedPages.every((pageNum, index) => {
+        return index === 0 || pageNum === selectedPages[index - 1] + 1;
+      });
+
+      if (selectedPages.length === 1) {
+        link.download = `${baseName}_page_${selectedPages[0]}.pdf`;
+      } else if (contiguous) {
+        link.download = `${baseName}_pages_${selectedPages[0]}-${selectedPages[selectedPages.length - 1]}.pdf`;
+      } else {
+        link.download = `${baseName}_selected_${selectedPages.length}_pages.pdf`;
+      }
+
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -159,11 +187,7 @@ export default function Home() {
     }
   };
 
-  const isValidRange =
-    pdfInfo &&
-    startPage >= 1 &&
-    endPage >= startPage &&
-    endPage <= pdfInfo.pageCount;
+  const isValidSelection = pdfInfo && selectedPages.length > 0;
 
   const resetFile = () => {
     if (pdfInfo?.url) {
@@ -171,6 +195,7 @@ export default function Home() {
     }
     setPdfInfo(null);
     setSelectedFileName("");
+    setSelectedPages([]);
     setStartPage(1);
     setEndPage(1);
     setError(null);
@@ -179,19 +204,56 @@ export default function Home() {
     }
   };
 
-  const selectedPageCount = isValidRange ? endPage - startPage + 1 : 0;
+  const selectedPageCount = selectedPages.length;
 
   const pageNumbers = useMemo(() => {
     if (!pdfInfo) return [];
     return Array.from({ length: pdfInfo.pageCount }, (_, i) => i + 1);
   }, [pdfInfo]);
 
-  const isPageVisible = useCallback(
+  const selectedPageSet = useMemo(() => {
+    return new Set(selectedPages);
+  }, [selectedPages]);
+
+  const isPageSelected = useCallback(
     (pageNum: number) => {
-      return pageNum >= startPage && pageNum <= endPage;
+      return selectedPageSet.has(pageNum);
     },
-    [startPage, endPage]
+    [selectedPageSet]
   );
+
+  const setRangeSelection = useCallback(
+    (from: number, to: number) => {
+      const rangePages = buildRangePages(from, to);
+      if (rangePages.length === 0) return;
+
+      setSelectedPages(rangePages);
+      setStartPage(rangePages[0]);
+      setEndPage(rangePages[rangePages.length - 1]);
+    },
+    [buildRangePages]
+  );
+
+  const togglePageSelection = useCallback(
+    (pageNum: number) => {
+      setSelectedPages((prevPages) => {
+        const nextPages = prevPages.includes(pageNum)
+          ? prevPages.filter((page) => page !== pageNum)
+          : [...prevPages, pageNum];
+
+        return normalizePages(nextPages);
+      });
+    },
+    [normalizePages]
+  );
+
+  // Keep range controls aligned with current selection bounds.
+  useEffect(() => {
+    if (selectedPages.length === 0) return;
+
+    setStartPage(selectedPages[0]);
+    setEndPage(selectedPages[selectedPages.length - 1]);
+  }, [selectedPages]);
 
   // Auto-scroll to start page when it changes
   useEffect(() => {
@@ -337,7 +399,7 @@ export default function Home() {
                     value={startPage}
                     onChange={(e) => {
                       const val = parseInt(e.target.value) || 1;
-                      setStartPage(Math.max(1, Math.min(val, pdfInfo.pageCount)));
+                      setRangeSelection(val, endPage);
                     }}
                     className="input"
                     aria-label="Start page"
@@ -352,7 +414,7 @@ export default function Home() {
                     value={endPage}
                     onChange={(e) => {
                       const val = parseInt(e.target.value) || 1;
-                      setEndPage(Math.max(1, Math.min(val, pdfInfo.pageCount)));
+                      setRangeSelection(startPage, val);
                     }}
                     className="input"
                     aria-label="End page"
@@ -362,8 +424,7 @@ export default function Home() {
                   type="button"
                   className="mini-action"
                   onClick={() => {
-                    setStartPage(1);
-                    setEndPage(pdfInfo.pageCount);
+                    setRangeSelection(1, pdfInfo.pageCount);
                   }}
                 >
                   All
@@ -384,15 +445,14 @@ export default function Home() {
                 >
                   <div className="thumb-row">
                     {pageNumbers.map((pageNum) => {
-                      const selected = isPageVisible(pageNum);
+                      const selected = isPageSelected(pageNum);
                       return (
                         <div
                           key={pageNum}
                           ref={(el) => setPageRef(pageNum, el)}
                           className={`thumb-card ${selected ? "selected" : ""}`}
                           onClick={() => {
-                            setStartPage(pageNum);
-                            setEndPage(pageNum);
+                            togglePageSelection(pageNum);
                           }}
                         >
                           <div className="thumb-check" aria-hidden={!selected}>
@@ -416,18 +476,18 @@ export default function Home() {
 
               <div className="action-bar">
                 <div className="action-meta">
-                  {isValidRange ? (
+                  {isValidSelection ? (
                     <>
                       {selectedPageCount} page{selectedPageCount !== 1 && "s"} selected
                     </>
                   ) : (
-                    "Invalid range"
+                    "No pages selected"
                   )}{" "}
                   · ready to extract
                 </div>
                 <button
                   onClick={extractPages}
-                  disabled={!isValidRange || isProcessing}
+                  disabled={!isValidSelection || isProcessing}
                   className="btn btn-primary extract-btn"
                 >
                   {isProcessing ? "EXTRACTING..." : "EXTRACT PAGES"}
